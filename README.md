@@ -47,4 +47,4 @@ FBI NICS Firearm Background Check Data
 
 ## Dashboard Preview
 
-![Dashboard](images/Dashboard_SS.png)
+![Dashboard](images/dashboard.png)
