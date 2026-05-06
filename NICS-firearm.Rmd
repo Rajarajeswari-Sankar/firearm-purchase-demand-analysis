@@ -1,0 +1,308 @@
+---
+title: NICS Firearm Check Project
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(shiny)
+library(dplyr)
+library(readr)
+library(zoo)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(ggrepel)  
+library(scales)
+library(factoextra)
+library(broom)
+```
+
+
+
+```{r}
+#State-Level Firearm Demand Analysis: Growth, Trends, and Composition — Interactive Dashboard
+#-----------------------------------------------------------------------------------------------
+# DATA SOURCE : FBI National Instant Criminal Background Check System (NICS)
+# DATASET     : nics-checks-last-five-years.csv (Jan 2019 – Sep 2023)
+# STRUCTURE   : 3,135 rows × 27 columns. Each row = one state × one month.
+# Dashboard Components:
+# 1. Left map: Monthly demand growth rate (short-term change)
+# 2. Right map: Demand Trend (Regression slope within-year trend direction)
+# 3. Bar chart: Category composition for any selected state from maps
+  
+# 
+# Data Loading
+  
+df <- read_csv("nics-firearm-background-checks.csv")
+
+territories <- c("Guam", "Mariana Islands", "Puerto Rico", "Virgin Islands")
+df <- df %>% filter(!state %in% territories)
+
+# Data Cleaning and Preparation 
+df$month <- as.yearmon(df$month)
+df$year  <- format(df$month, "%Y")
+df <- df %>% filter(year %in% c("2019","2020","2021","2022","2023"))
+df <- df %>% arrange(state, month)
+
+
+# Firearm Demand Check - Key metric used
+df <- df %>%
+  mutate(demand_checks = handgun + long_gun + multiple + permit + other)
+
+# Calculating Growth Rate Month-Over-Month 
+df <- df %>%
+  group_by(state) %>%
+  mutate(growth = ifelse(lag(demand_checks) > 0,
+                       (demand_checks - lag(demand_checks)) / lag(demand_checks),
+                       NA))
+```
+
+
+
+
+```{r}
+# Regression slope per state per year
+df <- df %>%
+  arrange(state, year, month)
+
+slopes <- df %>%
+  group_by(state, year) %>%
+  mutate(time_in_year = row_number()) %>%   
+  do({
+    if(nrow(.) > 1){
+      model <- lm(demand_checks ~ time_in_year, data = .)
+      data.frame(slope = coef(model)[2])
+    } else {
+      data.frame(slope = NA)
+    }
+  })
+
+
+# Aggregate to Year Level
+#growth = mean of all valid monthly growth rates in that year
+
+state_year <- df %>%
+  group_by(state, year) %>%
+  summarise(growth = mean(growth, na.rm=TRUE),
+    handgun = sum(handgun),
+    long_gun = sum(long_gun),
+    multiple = sum(multiple),
+    permit = sum(permit),
+    other = sum(other),
+    totals = sum(totals)
+  ) %>%
+  left_join(slopes, by=c("state","year"))
+
+# Category Shares
+# Each share = category count/totals
+
+state_year <- state_year %>%
+  mutate(handgun_share = handgun/totals,
+    longgun_share = long_gun/totals,
+    multiple_share = multiple/totals,
+    permit_share = permit/totals,
+    other_share = other/totals)
+
+```
+
+
+
+```{r}
+
+# State Postal Codes required for  USA choropleth mapping
+
+state_codes <- c("Alabama"="AL","Alaska"="AK","Arizona"="AZ","Arkansas"="AR",
+  "California"="CA","Colorado"="CO","Connecticut"="CT","Delaware"="DE",
+  "Florida"="FL","Georgia"="GA","Hawaii"="HI","Idaho"="ID",
+  "Illinois"="IL","Indiana"="IN","Iowa"="IA","Kansas"="KS",
+  "Kentucky"="KY","Louisiana"="LA","Maine"="ME","Maryland"="MD",
+  "Massachusetts"="MA","Michigan"="MI","Minnesota"="MN","Mississippi"="MS",
+  "Missouri"="MO","Montana"="MT","Nebraska"="NE","Nevada"="NV",
+  "New Hampshire"="NH","New Jersey"="NJ","New Mexico"="NM","New York"="NY",
+  "North Carolina"="NC","North Dakota"="ND","Ohio"="OH","Oklahoma"="OK",
+  "Oregon"="OR","Pennsylvania"="PA","Rhode Island"="RI","South Carolina"="SC",
+  "South Dakota"="SD","Tennessee"="TN","Texas"="TX","Utah"="UT",
+  "Vermont"="VT","Virginia"="VA","Washington"="WA","West Virginia"="WV",
+  "Wisconsin"="WI","Wyoming"="WY")
+
+state_year$code <- state_codes[state_year$state]
+
+```
+
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+library(plotly)
+# User Interface (UI)
+
+ui <- fluidPage(
+  tags$head(
+  tags$style(HTML("html, body, .container-fluid {min-height: 100vh; margin: 0;   padding: 0;}
+  "))
+),
+titlePanel("State-Level Firearm Demand Analysis: Growth, Trends, and Composition"),
+  
+#Year selection
+  fluidRow(column(3,
+      selectInput("year", "Select Year:",
+                  choices  = sort(unique(state_year$year)),
+                  selected = "2019", width    = "100%"))
+  ),
+#maps side by side  
+  fluidRow(column(6, plotlyOutput("growth_map", height = "320px", width = "540px")),
+    column(6, plotlyOutput("slope_map",  height = "320px", width = "540px"))
+  ),
+#Composition bar chart
+  fluidRow(column(12, plotlyOutput("bar_chart", height = "280px", width = "580px"))
+  )
+)
+
+#Server section
+#-----------------------------
+
+server <- function(input, output, session) {
+  
+  selected_state <- reactiveVal("California")
+  
+  # MAP 1 — Average Monthly Growth Rate
+  # Filter to only the rows matching the selected year
+  output$growth_map <- renderPlotly({
+    data <- state_year %>% filter(year == input$year)
+    plot_ly(data, source = "growth_click") %>%
+      add_trace(z = ~growth, zmid = 0,
+        locations = ~code, locationmode = "USA-states",
+        type = "choropleth", 
+        colors = "RdBu",
+        text = ~state,
+        hovertemplate = paste("<b>%{text}</b><br>",
+                              "Growth: %{z:.3f}<br>",
+                              "<extra></extra>"),
+        key = ~state
+      ) %>%
+      layout(title = "Monthly Demand Growth Rate",
+             geo  = list(scope = "usa"))
+  })
+  
+  # MAP 2 — Regression Slope
+  output$slope_map <- renderPlotly({
+    data <- state_year %>% filter(year == input$year)
+    plot_ly(data, source = "slope_click") %>%
+      add_trace(z = ~slope, zmid = 0, locations = ~code, 
+        locationmode = "USA-states", type  = "choropleth", 
+        colors = c("#440154", "#ccff00", "#ffff00"),
+        text = ~state,
+        hovertemplate = paste("<b>%{text}</b><br>",
+                              "Slope: %{z:.1f}<br>",
+                              "<extra></extra>"),
+        key = ~state
+      ) %>%
+      layout(title = "Demand Trend (Regression Slope)", geo = list(scope = "usa"))
+  })
+  
+  #State selection in growth map click
+  observeEvent(event_data("plotly_click", source = "growth_click"), {
+    click <- event_data("plotly_click", source = "growth_click")
+    if (!is.null(click$key)) selected_state(click$key)
+  })
+  
+  #State selection in slope map click
+  observeEvent(event_data("plotly_click", source = "slope_click"), {
+    click <- event_data("plotly_click", source = "slope_click")
+    if (!is.null(click$key)) selected_state(click$key)
+  })
+
+  # Categorical Bar Chart
+  output$bar_chart <- renderPlotly({
+    st   <- selected_state()
+    data <- state_year %>% filter(state == st, year == input$year)
+    if (nrow(data) == 0) return(NULL)
+    plot_ly(x = c(data$handgun_share, data$longgun_share,
+            data$multiple_share, data$permit_share, data$other_share),
+      y = c("Handgun", "Long Gun", "Multiple", "Permit", "Other"),
+      type = "bar", orientation = "h"
+    ) %>%
+      layout(title = paste("Categorical-Composition —", st), xaxis = list(tickformat = ".0%"))
+  })
+}
+
+```
+
+```{r, echo=FALSE}
+shinyApp(ui = ui, server = server, options = list(height = 1100, width = 1200))
+```
+
+
+
+```{r}
+#Composition Shift (2019–2023)
+#color to use 
+Blue <- "#2563EB"
+Red <- "#DC2626"
+Grn <- "#16A34A"
+Org <- "#EA580C"
+Prpl <- "#7C3AED"
+Grey <- "#6B7280"
+
+comp <- df %>%
+  group_by(year) %>%
+  summarise(handgun = sum(handgun),
+    long_gun = sum(long_gun),  multiple = sum(multiple),
+    permit = sum(permit),  other = sum(other),
+    totals = sum(totals),
+    .groups = "drop"
+  ) %>%
+  mutate(handgun_sh = handgun/totals * 100,
+    longgun_sh  = long_gun/totals * 100,
+    multiple_sh = multiple/totals * 100,
+    permit_sh = permit/totals * 100,
+    other_sh  = other/totals * 100
+  ) %>%
+  select(year, handgun_sh, longgun_sh, multiple_sh, permit_sh, other_sh) %>%
+  pivot_longer(-year, names_to = "type", values_to = "share") %>%
+  mutate(type = recode(type, handgun_sh = "Handgun",
+      longgun_sh  = "Long Gun", multiple_sh = "Multiple",
+      permit_sh = "Permit", other_sh = "Other"
+    ), type = factor(type, levels = c("Handgun", "Long Gun", "Multiple", "Permit", "Other"))
+  )
+
+colours <- c("Handgun"  = Blue,
+  "Long Gun" = Grn, "Multiple" = Org,
+  "Permit"  = Prpl, "Other" = Grey)
+
+fig <- ggplot(comp, aes(x = factor(year), y = share, fill = type)) +
+  geom_col(position = position_dodge(width = 0.75),
+           width = 0.65, alpha = 0.88) +
+
+  annotate("text", x = "2020", y = 34.5,
+           label = "Handgun\npeak\n(COVID)",
+           colour = Blue, size = 2.9, fontface = "italic",
+           hjust  = -0.25) +
+  annotate("segment", x = 1.87, xend = 1.87,
+           y = 33, yend = comp %>%
+             filter(year == 2020, type == "Handgun") %>%
+             pull(share) + 0.5, colour = Blue, linewidth = 0.6,
+           arrow = arrow(length = unit(0.15, "cm"))) +
+
+  scale_fill_manual(values = colours, name = "Check Type") +
+  scale_y_continuous(labels = label_number(suffix = "%", accuracy = 1), limits = c(0, 50)) +
+
+  labs(title  = "Composition of Demand Checks (2019–2023)",
+    x = "Year",  y = "Share of Total NICS Checks (%)",
+    caption  = "Source: FBI NICS dataset. 50 states, territories excluded.") +  
+  theme_minimal(base_size = 11) +
+  theme(plot.title = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(colour = Grey, size = 9),
+    plot.caption = element_text(colour = Grey, size = 7.5),
+    legend.position  = "right",
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank()
+  )
+
+fig
+```
+
