@@ -44,3 +44,7 @@ https://rajarajeswari-sankar-data-science-2026.shinyapps.io/nics-firearm/
 
 ## Dataset
 FBI NICS Firearm Background Check Data
+
+## Dashboard Preview
+
+![Dashboard](images/Dashboard_SS.png)
