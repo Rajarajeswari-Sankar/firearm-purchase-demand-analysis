@@ -129,6 +129,8 @@ A Shiny dashboard deployed on shinyapps.io providing three interactive panels:
 Interactive Dashboard:
 https://rajarajeswari-sankar-data-science-2026.shinyapps.io/nics-firearm/
 
+---
+
 Key findings from the dashboard:
 - 2019: Clear geographic variation — Mississippi highest growth
 - 2020: Mild uniform positive growth masking the concentrated March surge
