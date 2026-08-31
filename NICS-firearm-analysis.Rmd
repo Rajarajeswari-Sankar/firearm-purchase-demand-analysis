@@ -1,0 +1,306 @@
+---
+title: "Firearm Purchase Demand Analysis"
+author: "Rajarajeswari Sankar (25251391)"
+output:
+  html_document:
+    toc: false
+    df_print: paged
+  word_document:
+    toc: false
+  pdf_document:
+    toc: false
+    number_sections: false
+    latex_engine: xelatex
+fontsize: 12pt
+geometry: margin=2.5cm
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(shiny)
+library(dplyr)
+library(readr)
+library(zoo)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(ggrepel)  
+library(scales)
+library(factoextra)
+library(broom)
+```
+
+
+
+
+
+## Monthly_Demand
+
+```{r}
+df <- read_csv("nics-firearm-background-checks.csv")
+
+territories <- c("Guam", "Mariana Islands", "Puerto Rico", "Virgin Islands")
+df <- df %>% filter(!state %in% territories)
+
+df <- df %>%
+  mutate(
+    month         = as.Date(paste0(month, "-01")),
+    year          = year(month),
+    demand_checks = handgun + long_gun + multiple + permit + other
+  ) %>%
+  filter(year %in% c(2019, 2020, 2021, 2022, 2023))
+
+national <- df %>%
+  group_by(month, year) %>%
+  summarise(demand = sum(demand_checks), .groups = "drop")
+
+year_colors <- c(
+  "2019" = "#6366F1",
+  "2020" = "#DC2626",
+  "2021" = "#EA580C",
+  "2022" = "#16A34A",
+  "2023" = "#2563EB"
+)
+
+fig1 <- ggplot(national,
+               aes(x = month, y = demand / 1e6,
+                   colour = factor(year),
+                   group  = factor(year))) +
+  annotate("rect",
+           xmin = as.Date("2020-03-01"),
+           xmax = as.Date("2020-12-31"),
+           ymin = -Inf, ymax = Inf,
+           fill = "#DC2626", alpha = 0.07) +
+  annotate("text",
+           x = as.Date("2020-07-15"), y = 9.6,
+           label  = "COVID surge\n(Mar–Dec 2020)",
+           colour = "#DC2626", size = 3,
+           fontface = "italic") +
+  geom_line(linewidth = 1.1) +
+  geom_point(size = 1.6, alpha = 0.7) +
+  scale_colour_manual(values = year_colors, name = "Year") +
+  scale_y_continuous(
+    labels = label_number(suffix = "M", accuracy = 0.1)) +
+  scale_x_date(
+    date_breaks = "6 months",
+    date_labels = "%b %Y") +
+  labs(
+    title    = "National Monthly Demand Checks — 2019 to 2023",
+    subtitle = "Sum of handgun + long gun + multiple + permit + other checks across all 50 states",
+    x        = NULL,
+    y        = "Demand Checks (millions)",
+    caption  = "Territories excluded. demand_checks = handgun + long_gun + multiple + permit."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(colour = "#6B7280", size = 9),
+    plot.caption     = element_text(colour = "#6B7280", size = 7.5),
+    legend.position  = "right",
+    panel.grid.minor = element_blank(),
+    axis.text.x      = element_text(angle = 30, hjust = 1)
+  )
+
+print(fig1)
+
+```
+
+## Total Share
+```{r}
+nat_comp <- df %>%
+  group_by(year) %>%
+  summarise(
+    handgun  = sum(handgun),
+    long_gun = sum(long_gun),
+    multiple = sum(multiple),
+    permit   = sum(permit),
+    other    = sum(other),
+    totals   = sum(totals),
+    .groups  = "drop"
+  ) %>%
+  mutate(
+    handgun_sh  = handgun  / totals * 100,
+    longgun_sh  = long_gun / totals * 100,
+    multiple_sh = multiple / totals * 100,
+    permit_sh   = permit   / totals * 100,
+    other_sh    = other    / totals * 100
+  ) %>%
+  select(year, handgun_sh, longgun_sh,
+         multiple_sh, permit_sh, other_sh) %>%
+  pivot_longer(-year,
+               names_to  = "type",
+               values_to = "share") %>%
+  mutate(
+    type = recode(type,
+      handgun_sh  = "Handgun",
+      longgun_sh  = "Long Gun",
+      multiple_sh = "Multiple",
+      permit_sh   = "Permit",
+      other_sh    = "Other"),
+    type = factor(type,
+                  levels = c("Handgun","Long Gun",
+                             "Multiple","Permit","Other"))
+  )
+
+type_colours <- c(
+  "Handgun"  = "#2563EB",
+  "Long Gun" = "#16A34A",
+  "Multiple" = "#EA580C",
+  "Permit"   = "#7C3AED",
+  "Other"    = "#6B7280"
+)
+
+fig2 <- ggplot(nat_comp,
+               aes(x = factor(year), y = share, fill = type)) +
+  geom_col(position = position_dodge(width = 0.75),
+           width = 0.65, alpha = 0.88) +
+  annotate("text",
+           x = "2020", y = 34.5,
+           label  = "Handgun\npeak\n(COVID)",
+           colour = "#2563EB", size = 2.9,
+           fontface = "italic", hjust = -0.25) +
+  annotate("segment",
+           x = 1.87, xend = 1.87,
+           y = 33,
+           yend = nat_comp %>%
+             filter(year == 2020, type == "Handgun") %>%
+             pull(share) + 0.5,
+           colour    = "#2563EB",
+           linewidth = 0.6,
+           arrow = arrow(length = unit(0.15, "cm"))) +
+  scale_fill_manual(values = type_colours, name = "Check Type") +
+  scale_y_continuous(
+    labels = label_number(suffix = "%", accuracy = 1),
+    limits = c(0, 50)) +
+  labs(
+    title    = "National Composition of Demand Checks by Year (2019–2023)",
+    subtitle = "Shares computed over total NICS checks (totals column) — not over demand_checks",
+    x        = "Year",
+    y        = "Share of Total NICS Checks (%)",
+    caption  = "Source: FBI NICS dataset. 50 states, territories excluded."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title         = element_text(face = "bold", size = 13),
+    plot.subtitle      = element_text(colour = "#6B7280", size = 9),
+    plot.caption       = element_text(colour = "#6B7280", size = 7.5),
+    legend.position    = "right",
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_blank()
+  )
+
+print(fig2)
+```
+
+## PCA Analysis
+
+```{r}
+
+df <- df %>% mutate(
+  grp_purchase = handgun + long_gun + multiple + other + permit,
+  grp_private  = private_sale_handgun + private_sale_long_gun +
+                 private_sale_other,
+  grp_rental = rentals_handgun + rentals_long_gun,
+  grp_secondary = prepawn_handgun + prepawn_long_gun +
+      prepawn_other + redemption_handgun + redemption_long_gun +
+      redemption_other,
+   grp_returns = returned_handgun +
+      returned_long_gun +  returned_other + return_to_seller_handgun +
+      return_to_seller_long_gun + return_to_seller_other)
+
+state_year_grp <- df %>%
+  group_by(state, year) %>%
+  summarise(
+    purchase_demand = sum(grp_purchase, na.rm = TRUE),
+    private         = sum(grp_private, na.rm = TRUE),
+    rental          = sum(grp_rental, na.rm = TRUE),
+    secondary      = sum(grp_secondary, na.rm = TRUE),
+    return          = sum(grp_returns, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+labels  <- state_year_grp %>% select(state, year)
+
+pca_mat <- state_year_grp %>%
+  select(purchase_demand, private, rental, secondary, return) %>%
+  scale()
+
+pca_result <- prcomp(pca_mat, center = FALSE, scale. = FALSE)
+
+# Flip PC1 if purchase loads negative
+if (pca_result$rotation["purchase_demand", "PC1"] < 0) {
+  pca_result$rotation[, "PC1"] <- -pca_result$rotation[, "PC1"]
+  pca_result$x[, "PC1"]        <- -pca_result$x[, "PC1"]
+}
+
+scores <- as.data.frame(pca_result$x)
+scores$state <- labels$state
+scores$year  <- labels$year
+
+scores_avg <- scores %>%
+  group_by(state) %>%
+  summarise(PC1 = mean(PC1), PC2 = mean(PC2), .groups = "drop")
+
+loadings <- as.data.frame(pca_result$rotation[, 1:2])
+loadings$variable <- rownames(loadings)
+
+scale_factor <- max(abs(scores_avg[, c("PC1","PC2")])) /
+                max(abs(loadings[, c("PC1","PC2")])) * 0.45
+
+loadings$PC1_scaled <- loadings$PC1 * scale_factor
+loadings$PC2_scaled <- loadings$PC2 * scale_factor
+
+var_exp <- round(summary(pca_result)$importance[2,] * 100, 1)
+
+biplot <- ggplot() +
+  geom_point(data = scores_avg,
+             aes(x = PC1, y = PC2),
+             colour = "#2563EB", alpha = 0.6, size = 2.5) +
+  geom_text_repel(data = scores_avg,
+                  aes(x = PC1, y = PC2, label = state),
+                  size = 2.8, colour = "#6B7280",
+                  max.overlaps = 20) +
+  geom_segment(data = loadings,
+               aes(x = 0, y = 0,
+                   xend = PC1_scaled,
+                   yend = PC2_scaled),
+               arrow     = arrow(length = unit(0.25, "cm")),
+               colour    = "#DC2626",
+               linewidth = 0.9) +
+  geom_label(data = loadings,
+             aes(x     = PC1_scaled * 1.15,
+                 y     = PC2_scaled * 1.15,
+                 label = variable),
+             colour     = "#DC2626", size = 3.2,
+             fill       = "white",
+             label.size = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed",
+             colour = "#9CA3AF", linewidth = 0.5) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             colour = "#9CA3AF", linewidth = 0.5) +
+  labs(
+    title    = "Biplot — PC1 vs PC2 (Purchase_demand, Private, Rentals, Secondary, Return)",
+    subtitle = paste0("PC1 = ", var_exp[1], "% variance  |  ",
+                      "PC2 = ", var_exp[2], "% variance  |  ",
+                      "Arrows = group loadings  |  ",
+                      "Points = state averages"),
+    x       = paste0("PC1 (", var_exp[1], "%)"),
+    y       = paste0("PC2 (", var_exp[2], "%)"),
+    caption = "Each point = average PC score across 2019–2023 for that state."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(colour = "#6B7280", size = 9),
+    plot.caption     = element_text(colour = "#6B7280", size = 7.5),
+    panel.grid.minor = element_blank()
+  )
+
+print(biplot)
+```
+
+
+
