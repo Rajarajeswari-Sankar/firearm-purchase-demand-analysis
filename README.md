@@ -50,35 +50,6 @@ Excluded columns and reasons:
 
 ---
 
-## Repository Structure
-
-nics-firearm-analysis/
-│
-├── data/
-│ └── nics-firearm-background-checks.csv
-│
-├── analysis/
-│ ├── 01_national_trend.R
-│ ├── 02_pca_analysis.R
-│ ├── 03_composition_share.R
-│ └── 04_dashboard_prep.R
-│
-├── dashboard/
-│ ├── NICS_project.Rmd
-│ └── nics-firearm-background-checks.csv
-│
-├── outputs/
-│ ├── national_monthly_demand.png
-│ ├── pca_biplot.png
-│ └── composition_share.png
-│
-├── report/
-│ └── NICS_Analysis_Report.pdf
-│
-└── README.md
-
----
-
 ## Analysis Components
 
 ### 1. National Monthly Demand Trend
