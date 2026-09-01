@@ -177,4 +177,4 @@ Key findings from the dashboard:
 
 ## Dashboard Preview
 
-![Dashboard](Dashboard_SS.png)
+![Dashboard](Dashboard.png)
