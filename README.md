@@ -1,4 +1,4 @@
-# Firearm Purchase Demand Analysis
+# 🔫 Firearm Purchase Demand Analysis
 
 ## Overview
 This project analyses firearm background check data from the FBI's National 
@@ -13,7 +13,7 @@ checks vary across states, and what structural factors explain that variation?
 
 ---
 
-## Dataset
+## 🗂️ Dataset
 - **Source:** FBI NICS Firearm Background Checks
 - **File:** `nics-firearm-background-checks.csv`
 - **Coverage:** November 1998 – September 2023
@@ -24,7 +24,7 @@ checks vary across states, and what structural factors explain that variation?
 
 ---
 
-## Demand Metric Definition
+## 🎯 Demand Metric Definition
 Raw NICS totals include administrative rechecks, pawn transactions, and 
 rentals that do not represent new firearm purchases. A focused demand metric 
 was constructed as:
@@ -50,9 +50,9 @@ Excluded columns and reasons:
 
 ---
 
-## Analysis Components
+## 🔍 Analysis Components
 
-### 1. National Monthly Demand Trend
+### 1. 📈 National Monthly Demand Trend
 Time series of aggregated monthly demand checks across all 50 states from 
 2019 to 2023. Each year is plotted in a distinct colour to reveal 
 within-year seasonality alongside cross-year shifts. The COVID-19 surge 
@@ -60,7 +60,15 @@ period (March–December 2020) is highlighted, showing demand nearly doubling
 from the 2019 baseline before gradually returning to pre-pandemic levels 
 by 2022–2023.
 
-### 2. PCA Analysis — Structural Group Validation
+### 2. 🥧 National Composition of Demand Checks
+Annual shares of each check type relative to total NICS checks (2019–2023). 
+Handgun share peaked at approximately 31% in 2020 — the highest across all 
+five years — consistent with COVID-driven first-time buyer demand. Permit 
+share remained structurally stable at 20–29%, reflecting state-level 
+administrative routing differences rather than demand changes. Long gun share 
+was broadly stable at 17–19%, reflecting existing-owner behaviour.
+
+### 3. 🧬 PCA Analysis — Structural Group Validation
 Principal Component Analysis was conducted on five conceptual groups derived 
 from the 24 check-type columns:
 - **Purchase demand** — handgun + long_gun + multiple + other + permit
@@ -76,15 +84,7 @@ California and Texas appear as high-volume outliers on PC1. The biplot
 confirms that purchase demand and secondary market activity are distinct 
 behaviours, validating the demand_checks metric construction.
 
-### 3. National Composition of Demand Checks
-Annual shares of each check type relative to total NICS checks (2019–2023). 
-Handgun share peaked at approximately 31% in 2020 — the highest across all 
-five years — consistent with COVID-driven first-time buyer demand. Permit 
-share remained structurally stable at 20–29%, reflecting state-level 
-administrative routing differences rather than demand changes. Long gun share 
-was broadly stable at 17–19%, reflecting existing-owner behaviour.
-
-### 4. Interactive Dashboard
+### 4. 🖥️ Interactive Dashboard
 A Shiny dashboard deployed on shinyapps.io providing three interactive panels:
 
 - **Monthly Demand Growth Rate** — choropleth map of average month-over-month 
@@ -96,7 +96,7 @@ A Shiny dashboard deployed on shinyapps.io providing three interactive panels:
 - **Category Breakdown** — horizontal bar chart showing check-type composition 
   shares for any clicked state
   
-## Dashboard
+## 📊 Dashboard
 Interactive Dashboard:
 https://rajarajeswari-sankar-data-science-2026.shinyapps.io/nics-firearm/
 
@@ -114,7 +114,7 @@ Key findings from the dashboard:
   
 ---
 
-## Key Findings
+## 💡 Key Findings
 1. Firearm demand varies significantly across states and is highly sensitive 
    to policy events, elections, and external shocks
 2. The 2020 COVID surge temporarily eliminated inter-state variation — a 
@@ -128,7 +128,7 @@ Key findings from the dashboard:
 
 ---
 
-## Technologies
+## 🛠️ Technologies
 - **R** — tidyverse, lubridate, zoo, broom, ggplot2, ggrepel, plotly, scales
 - **Shiny** — interactive dashboard
 - **shinyapps.io** — deployment
